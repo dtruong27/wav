@@ -31,6 +31,9 @@ enum WavFormat {
 
   /// 64-bit float.
   float64,
+
+  /// extensible, with sub-format is one of the above values
+  extensible,
 }
 
 /// Extension methods for [WavFormat].

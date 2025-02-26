@@ -168,7 +168,7 @@ void main() async {
     final wav = await Wav.readFile(filename);
 
     expect(wav.samplesPerSecond, 48000);
-    expect(wav.format, WavFormat.float32);
+    expect(wav.format, WavFormat.extensible);
     expect(wav.channels.length, 1);
 
     expect(wav.duration, 0.7);

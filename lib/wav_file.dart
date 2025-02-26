@@ -35,11 +35,29 @@ class Wav {
   /// The format of the WAV file.
   final WavFormat format;
 
+  /// The sub-format in case format is extensible
+  final WavFormat? subFormat;
+
+  /// The effective bit depth in case format is extensible.
+  ///
+  /// Specifies the actual number of valid bits in each sample,
+  /// the remaining bits are padding.
+  final int? validBitsPerSample;
+
+  /// In case format is extensible, a channel mask specifies
+  /// how each audio channel should be interpreted.
+  /// Example: Bit 0 -> Front left, Bit 1 -> Front right,
+  /// Bit 2 -> Front center.
+  final int channelMask;
+
   /// Constructs a Wav directly from audio data.
   Wav(
     this.channels,
     this.samplesPerSecond, [
     this.format = WavFormat.pcm16bit,
+    this.subFormat,
+    this.validBitsPerSample,
+    this.channelMask = 0,
   ]);
 
   /// Read a Wav from a file.
@@ -59,7 +77,7 @@ class Wav {
   static const _kFloatFmtExtraSize = 12;
   static const _kPCM = 1;
   static const _kFloat = 3;
-  static const _kWavExtensible = 65534;
+  static const _kWavExtensible = 0xFFFE;
   static const _kStrRiff = 'RIFF';
   static const _kStrWave = 'WAVE';
   static const _kStrFmt = 'fmt ';
@@ -76,8 +94,7 @@ class Wav {
       if (bitsPerSample == 32) return WavFormat.float32;
       if (bitsPerSample == 64) return WavFormat.float64;
     } else if (formatCode == _kWavExtensible) {
-      if (bitsPerSample == 32) return WavFormat.float32;
-      if (bitsPerSample == 64) return WavFormat.float64;
+      return WavFormat.extensible;
     }
     throw FormatException('Unsupported format: $formatCode, $bitsPerSample');
   }
@@ -93,6 +110,7 @@ class Wav {
       ..readUint32() // File size.
       ..assertString(_kStrWave)
       ..findChunk(_kStrFmt);
+
     final fmtSize = roundUpToEven(byteReader.readUint32());
     final formatCode = byteReader.readUint16();
     final numChannels = byteReader.readUint16();
@@ -100,25 +118,53 @@ class Wav {
     byteReader.readUint32(); // Bytes per second.
     final bytesPerSampleAllChannels = byteReader.readUint16();
     final bitsPerSample = byteReader.readUint16();
-    if (fmtSize > _kFormatSize) byteReader.skip(fmtSize - _kFormatSize);
+
+    final format = _getFormat(formatCode, bitsPerSample);
+    int validBitsPerSample = bitsPerSample;
+    int channelMask = 0;
+    WavFormat? subFormat;
+
+    if (format == WavFormat.extensible) {
+      // Size of the extension: 22
+      byteReader.readUint16();
+      validBitsPerSample = byteReader.readUint16();
+      channelMask = byteReader.readUint32();
+
+      // The rest 16 bytes are the GUID including the data format code.
+      // The first two bytes are the data format code.
+      final subFormatCode = byteReader.readUint16();
+      subFormat = _getFormat(subFormatCode, bitsPerSample);
+
+      byteReader.skip(14);
+    } else if (fmtSize > _kFormatSize) {
+      byteReader.skip(fmtSize - _kFormatSize);
+    }
 
     byteReader.findChunk(_kStrData);
     final dataSize = byteReader.readUint32();
     final numSamples = dataSize ~/ bytesPerSampleAllChannels;
+
     final channels = <Float64List>[];
     for (int i = 0; i < numChannels; ++i) {
       channels.add(Float64List(numSamples));
     }
-    final format = _getFormat(formatCode, bitsPerSample);
 
     // Read samples.
-    final readSample = byteReader.getSampleReader(format);
+    final readSample = byteReader.getSampleReader(subFormat ?? format);
     for (int i = 0; i < numSamples; ++i) {
       for (int j = 0; j < numChannels; ++j) {
         channels[j][i] = readSample();
       }
     }
-    return Wav(channels, samplesPerSecond, format);
+
+    return Wav(
+      channels,
+      samplesPerSecond,
+      format,
+      subFormat,
+      validBitsPerSample,
+      channelMask,
+    );
   }
 
   /// Mix the audio channels down to mono.
