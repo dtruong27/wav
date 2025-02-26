@@ -194,8 +194,10 @@ class Wav {
   /// lengths, they will be padded with zeros.
   Uint8List write() {
     // Calculate sizes etc.
-    final bitsPerSample = format.bitsPerSample;
-    final isFloat = format == WavFormat.float32 || format == WavFormat.float64;
+    final sampleFormat = subFormat ?? format;
+    final bitsPerSample = sampleFormat.bitsPerSample;
+    final isFloat =
+        sampleFormat == WavFormat.float32 || sampleFormat == WavFormat.float64;
     final bytesPerSample = bitsPerSample ~/ 8;
     final numChannels = channels.length;
     int numSamples = 0;
@@ -234,7 +236,7 @@ class Wav {
       ..writeUint32(dataSize);
 
     // Write samples.
-    final writeSample = bytes.getSampleWriter(format);
+    final writeSample = bytes.getSampleWriter(sampleFormat);
     for (int i = 0; i < numSamples; ++i) {
       for (int j = 0; j < numChannels; ++j) {
         double sample = i < channels[j].length ? channels[j][i] : 0;
