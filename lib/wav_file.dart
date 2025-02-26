@@ -78,6 +78,7 @@ class Wav {
   static const _kPCM = 1;
   static const _kFloat = 3;
   static const _kWavExtensible = 0xFFFE;
+  static const _kExCbSize = 22;
   static const _kStrRiff = 'RIFF';
   static const _kStrWave = 'WAVE';
   static const _kStrFmt = 'fmt ';
@@ -195,6 +196,7 @@ class Wav {
   Uint8List write() {
     // Calculate sizes etc.
     final sampleFormat = subFormat ?? format;
+    final isExtensible = format == WavFormat.extensible;
     final bitsPerSample = sampleFormat.bitsPerSample;
     final isFloat =
         sampleFormat == WavFormat.float32 || sampleFormat == WavFormat.float64;
@@ -218,19 +220,60 @@ class Wav {
       ..writeUint32(fileSize)
       ..writeString(_kStrWave)
       ..writeString(_kStrFmt)
-      ..writeUint32(_kFormatSize)
-      ..writeUint16(isFloat ? _kFloat : _kPCM)
+      ..writeUint32(
+        _kFormatSize +
+            (isExtensible
+                ? 24
+                : isFloat
+                    ? 2
+                    : 0),
+      )
+      ..writeUint16(
+        isExtensible
+            ? _kWavExtensible
+            : isFloat
+                ? _kFloat
+                : _kPCM,
+      )
       ..writeUint16(numChannels)
       ..writeUint32(samplesPerSecond)
       ..writeUint32(bytesPerSecond)
       ..writeUint16(bytesPerSampleAllChannels)
       ..writeUint16(bitsPerSample);
+
+    if (isFloat || isExtensible) {
+      // Size of the extension
+      bytes.writeUint16(isExtensible ? _kExCbSize : 0);
+    }
+
+    if (isExtensible) {
+      bytes
+        ..writeUint16(validBitsPerSample ?? bitsPerSample)
+        ..writeUint32(channelMask)
+        ..writeUint16(isFloat ? _kFloat : _kPCM)
+        ..writeUint8(0x00)
+        ..writeUint8(0x00)
+        ..writeUint8(0x00)
+        ..writeUint8(0x00)
+        ..writeUint8(0x10)
+        ..writeUint8(0x00)
+        ..writeUint8(0x80)
+        ..writeUint8(0x00)
+        ..writeUint8(0x00)
+        ..writeUint8(0xAA)
+        ..writeUint8(0x00)
+        ..writeUint8(0x38)
+        ..writeUint8(0x9B)
+        ..writeUint8(0x71);
+    }
+
     if (isFloat) {
       bytes
         ..writeString(_kStrFact)
         ..writeUint32(_kFactSize)
         ..writeUint32(numSamples);
     }
+
     bytes
       ..writeString(_kStrData)
       ..writeUint32(dataSize);
