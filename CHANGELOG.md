@@ -1,3 +1,7 @@
+## 1.4.0
+
+- Support Extensible Wave-Format
+
 ## 1.3.0
 
 - Support raw audio files, which are essentially Wav files without their format
