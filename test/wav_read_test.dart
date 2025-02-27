@@ -46,6 +46,7 @@ void readTest(
 void waveExtensibleReadTest(
   String name,
   WavFormat subFormat,
+  int bitsOfAccuracy,
 ) {
   test('Read $subFormat file', () async {
     final filename = 'test/data/sine-$name-3channels.wav';
@@ -56,6 +57,8 @@ void waveExtensibleReadTest(
     expect(wav.channels.length, 3);
     expect(wav.duration, 0.25);
     expect(wav.channelMask, 7);
+
+    final epsilon = math.pow(0.5, bitsOfAccuracy - 1);
 
     for (int i = 0; i < 3; ++i) {
       expect(wav.channels[i].length, 2000);
@@ -71,7 +74,7 @@ void waveExtensibleReadTest(
                   (i + 1) *
                   (j.toDouble() / wav.samplesPerSecond.toDouble()),
             ),
-            1e-2,
+            epsilon,
           ),
           reason: 'Channel $i, sample $j',
         );
@@ -94,12 +97,12 @@ void main() async {
   readTest('float64-mono', WavFormat.float64, 1, 52);
   readTest('float64-stereo', WavFormat.float64, 2, 52);
 
-  waveExtensibleReadTest('8bit', WavFormat.pcm8bit);
-  waveExtensibleReadTest('16bit', WavFormat.pcm16bit);
-  waveExtensibleReadTest('24bit', WavFormat.pcm24bit);
-  waveExtensibleReadTest('32bit', WavFormat.pcm32bit);
-  waveExtensibleReadTest('float32', WavFormat.float32);
-  waveExtensibleReadTest('float64', WavFormat.float64);
+  waveExtensibleReadTest('8bit', WavFormat.pcm8bit, 8);
+  waveExtensibleReadTest('16bit', WavFormat.pcm16bit, 16);
+  waveExtensibleReadTest('24bit', WavFormat.pcm24bit, 24);
+  waveExtensibleReadTest('32bit', WavFormat.pcm32bit, 32);
+  waveExtensibleReadTest('float32', WavFormat.float32, 26);
+  waveExtensibleReadTest('float64', WavFormat.float64, 52);
 
   test('Reading skips unknown chunks', () {
     final buf = (BytesBuilder()

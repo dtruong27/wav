@@ -13,6 +13,8 @@
 // limitations under the License.
 
 import 'dart:io';
+
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:test/test.dart';
 import 'package:wav/wav.dart';
@@ -42,6 +44,44 @@ void writeTest(String name, WavFormat format, int numChannels) {
   });
 }
 
+void waveExtensibleWriteTest(String name, WavFormat subFormat) {
+  test('Write $subFormat file', () async {
+    final filename = 'test/data/sine-$name-3channels.wav';
+    final tempFilename = '$filename.temp';
+
+    final sampleRate = 8000;
+    final double duration = 0.25;
+    final freq = 440.0;
+    final nSamples = (duration * sampleRate).round();
+
+    final channels = <Float64List>[];
+    for (int i = 0; i < 3; ++i) {
+      channels.add(Float64List(nSamples));
+      for (int j = 0; j < nSamples; ++j) {
+        channels[i][j] = math.sin(
+          2 * math.pi * freq * (i + 1).toDouble() * (j.toDouble() / sampleRate),
+        );
+      }
+    }
+
+    final wav = Wav(
+      channels,
+      sampleRate,
+      WavFormat.extensible,
+      subFormat,
+      subFormat.bitsPerSample,
+      7,
+    );
+    await wav.writeFile(tempFilename);
+
+    var expected = await File(filename).readAsBytes();
+    final actual = await File(tempFilename).readAsBytes();
+    expect(actual, expected);
+
+    await File(tempFilename).delete();
+  });
+}
+
 void main() async {
   writeTest('8bit-mono', WavFormat.pcm8bit, 1);
   writeTest('8bit-stereo', WavFormat.pcm8bit, 2);
@@ -55,6 +95,8 @@ void main() async {
   writeTest('float32-stereo', WavFormat.float32, 2);
   writeTest('float64-mono', WavFormat.float64, 1);
   writeTest('float64-stereo', WavFormat.float64, 2);
+
+  waveExtensibleWriteTest('8bit', WavFormat.pcm8bit);
 
   test('Writing includes padding byte', () {
     final wav = Wav(

@@ -120,23 +120,26 @@ class Wav {
     final bytesPerSampleAllChannels = byteReader.readUint16();
     final bitsPerSample = byteReader.readUint16();
 
-    final format = _getFormat(formatCode, bitsPerSample);
     int validBitsPerSample = bitsPerSample;
     int channelMask = 0;
     WavFormat? subFormat;
 
-    if (format == WavFormat.extensible) {
-      // Size of the extension: 22
-      byteReader.readUint16();
-      validBitsPerSample = byteReader.readUint16();
-      channelMask = byteReader.readUint32();
+    if (formatCode == _kWavExtensible) {
+      // Size of the extension
+      // 22 for wav extensible, 0 otherwise
+      final cbSize = byteReader.readUint16();
 
-      // The rest 16 bytes are the GUID including the data format code.
-      // The first two bytes are the data format code.
-      final subFormatCode = byteReader.readUint16();
-      subFormat = _getFormat(subFormatCode, bitsPerSample);
+      if (cbSize == _kExCbSize) {
+        validBitsPerSample = byteReader.readUint16();
+        channelMask = byteReader.readUint32();
 
-      byteReader.skip(14);
+        // The rest 16 bytes are the GUID including the data format code.
+        // The first two bytes are the data format code.
+        final subFormatCode = byteReader.readUint16();
+        subFormat = _getFormat(subFormatCode, bitsPerSample);
+
+        byteReader.skip(14);
+      }
     } else if (fmtSize > _kFormatSize) {
       byteReader.skip(fmtSize - _kFormatSize);
     }
@@ -149,6 +152,8 @@ class Wav {
     for (int i = 0; i < numChannels; ++i) {
       channels.add(Float64List(numSamples));
     }
+
+    final format = _getFormat(formatCode, bitsPerSample);
 
     // Read samples.
     final readSample = byteReader.getSampleReader(subFormat ?? format);
@@ -221,12 +226,7 @@ class Wav {
       ..writeString(_kStrWave)
       ..writeString(_kStrFmt)
       ..writeUint32(
-        _kFormatSize +
-            (isExtensible
-                ? 24
-                : isFloat
-                    ? 2
-                    : 0),
+        _kFormatSize + (isExtensible ? 24 : 0),
       )
       ..writeUint16(
         isExtensible
@@ -241,7 +241,7 @@ class Wav {
       ..writeUint16(bytesPerSampleAllChannels)
       ..writeUint16(bitsPerSample);
 
-    if (isFloat || isExtensible) {
+    if (isExtensible) {
       // Size of the extension
       bytes.writeUint16(isExtensible ? _kExCbSize : 0);
     }
